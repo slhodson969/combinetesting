@@ -6,30 +6,81 @@
 //
 
 import XCTest
+import Combine
 
 final class CombineTestingTests: XCTestCase {
 
-    override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-    }
+    func test_init_doesNotLoad() {
+        var callCount: Int = 0
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-    }
-
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        measure {
-            // Put the code you want to measure the time of here.
+        _ = SomeService {
+            callCount += 1
+            return PassthroughSubject().eraseToAnyPublisher()
         }
+
+        XCTAssertEqual(callCount, 0)
     }
 
+    func test_load_doesLoad() {
+        var callCount: Int = 0
+
+        let sut = SomeService {
+            callCount += 1
+            return PassthroughSubject().eraseToAnyPublisher()
+        }
+
+        sut.load()
+
+        XCTAssertEqual(callCount, 1)
+    }
+    
+//    func test_init_doesNotLoad2() {
+//        let (_, loadCallCount) = makeSUT()
+//
+//        XCTAssertEqual(loadCallCount, 0)
+//    }
+//
+//    func test_load_doesLoad2() {
+//        let (sut, loadCallCount) = makeSUT()
+//
+//        sut.load()
+//
+//        XCTAssertEqual(loadCallCount, 1)
+//    }
+//
+//    func makeSUT() -> (service: SomeService, loadCallCount: Int) {
+//        var loadCallCount: Int = 0
+//
+//        let sut = SomeService {
+//            loadCallCount += 1
+//            return PassthroughSubject().eraseToAnyPublisher()
+//        }
+//
+//        return (sut, loadCallCount)
+//    }
+}
+
+class SomeService {
+    private let loader: () -> AnyPublisher<String, Error>
+    private var cancellables: Set<AnyCancellable> = []
+    private var value: String?
+    
+    init(loader: @escaping () -> AnyPublisher<String, Error>) {
+        self.loader = loader
+    }
+    
+    func load() {
+        loader()
+            .sink(receiveCompletion: { completion in
+                switch completion {
+                case .finished:
+                    print("Finished")
+                case let .failure(error):
+                    print("Failed with error: \(error)")
+                }
+            }, receiveValue: { [weak self] value in
+                self?.value = value
+            })
+            .store(in: &cancellables)
+    }
 }
